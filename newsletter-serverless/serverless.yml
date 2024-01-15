@@ -1,0 +1,59 @@
+service: newsletter
+
+plugins:
+  - serverless-esbuild
+
+custom:
+  SUBSCRIBERS_TABLE: ${self:service}-${self:provider.stage}-subscribers
+  esbuild:
+    exclude: ['@aws-sdk'] # Exclude the @aws-sdk from the build as it is already available in the Lambda environment
+    minify: true # Minify the code
+
+package:
+  individually: true  # Package individually per functions
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'eu-west-1'}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource:
+            - Fn::GetAtt: [SubscribersTable, Arn]
+
+functions: # Your "Functions"
+  subscribe:
+    handler: src/subscribe.handler
+    events: # The "Events" that trigger this function
+      - httpApi: 'POST /subscriber'
+    environment:
+      SUBSCRIBERS_TABLE: ${self:custom.SUBSCRIBERS_TABLE}
+
+  unsubscribe:
+    handler: src/unsubscribe.handler
+    events:
+      - httpApi: 'DELETE /subscriber/{subscriberId}'
+    environment:
+      SUBSCRIBERS_TABLE: ${self:custom.SUBSCRIBERS_TABLE}
+
+
+# The "Resources" your "Functions" use. Raw AWS CloudFormation goes in here.
+resources:
+  Resources:
+    SubscribersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.SUBSCRIBERS_TABLE}
+        AttributeDefinitions:
+          - AttributeName: subscriberId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: subscriberId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
