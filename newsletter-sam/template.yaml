@@ -1,0 +1,75 @@
+# The AWSTemplateFormatVersion identifies the capabilities of the template
+AWSTemplateFormatVersion: 2010-09-09
+Description: Newsletter sample serverless application using AWS SAM
+
+# Transform section specifies one or more macros that AWS CloudFormation uses to process your template
+Transform: AWS::Serverless-2016-10-31
+
+Globals:
+  Function:
+    Runtime: nodejs18.x
+
+# Resources declares the AWS resources that you want to include in the stack
+Resources:
+  subscribe:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/subscribe.handler
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the SubscribersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SubscribersTable
+      Environment:
+        Variables:
+          # Make table name accessible as environment variable from function code during execution
+          SUBSCRIBERS_TABLE: !Ref SubscribersTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /subscriber
+            Method: POST
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        External:
+          - "@aws-sdk/*"
+
+  unsubscribe:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/unsubscribe.handler
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the SubscribersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SubscribersTable
+      Environment:
+        Variables:
+          # Make table name accessible as environment variable from function code during execution
+          SUBSCRIBERS_TABLE: !Ref SubscribersTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /subscriber/{subscriberId}
+            Method: DELETE
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        External:
+          - "@aws-sdk/*"
+
+  # DynamoDB table
+  SubscribersTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: subscriberId
+        Type: String
+
+Outputs:
+  WebEndpoint:
+    Description: "API Gateway endpoint URL for deployed stage"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
